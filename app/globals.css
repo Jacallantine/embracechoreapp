@@ -1,26 +1,335 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #030712;
+  --foreground: #f9fafb;
+  --embrace-green: #5ABA47;
+  --embrace-green-dark: #4a9e3a;
+  --embrace-green-light: #6ecc5c;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-embrace: var(--embrace-green);
+  --color-embrace-dark: var(--embrace-green-dark);
+  --color-embrace-light: var(--embrace-green-light);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #111827;
+}
+::-webkit-scrollbar-thumb {
+  background: #374151;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #4b5563;
+}
+
+/* Print-only header (hidden on screen) */
+.print-header {
+  display: none;
+}
+
+/* Print styles */
+@media print {
+  /* Hide nav, buttons, non-printable elements */
+  nav,
+  .no-print,
+  button:not(.print-show) {
+    display: none !important;
+  }
+
+  /* Show print header */
+  .print-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #5ABA47;
+  }
+  .print-header h2 {
+    font-size: 20px;
+    font-weight: 700;
+    color: #1a4428;
+    margin-bottom: 2px;
+  }
+  .print-header p {
+    font-size: 13px;
+    color: #333;
+  }
+  .print-header .print-subtext {
+    font-size: 11px;
+    color: #666;
+    margin-top: 2px;
+  }
+
+  /* Reset ALL backgrounds for printing */
+  *,
+  *::before,
+  *::after {
+    background-color: white !important;
+    background: white !important;
+    box-shadow: none !important;
+  }
+
+  body,
+  html {
+    background: white !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    font-size: 12px;
+  }
+
+  .min-h-screen,
+  .bg-gray-950,
+  .bg-gray-900,
+  .bg-gray-800,
+  .bg-surface {
+    min-height: auto !important;
+    background: white !important;
+    padding: 0 !important;
+  }
+
+  /* Container max width for print */
+  .max-w-5xl,
+  .max-w-3xl {
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+
+  /* All text should be dark */
+  .text-white,
+  .text-gray-100,
+  .text-gray-200,
+  .text-gray-300,
+  .text-gray-400,
+  .text-gray-500,
+  .text-gray-600,
+  .text-embrace,
+  .text-embrace-light,
+  .text-amber-400,
+  .text-amber-300,
+  .text-purple-400,
+  .text-purple-300,
+  h1, h2, h3, h4, h5, h6,
+  p, span, div {
+    color: #000 !important;
+  }
+
+  /* ===== CHORE LIST SPECIFIC PRINT STYLES ===== */
+  
+  /* Hide week navigation text and decorative elements */
+  .text-center.mb-6,
+  .flex.flex-col.gap-4.mb-8 > div:first-child > p,
+  .text-amber-400.text-xs.mt-1 {
+    display: none !important;
+  }
+
+  /* Simplify the grid */
+  .grid.gap-4,
+  .grid.gap-5 {
+    display: block !important;
+    margin: 0 !important;
+  }
+
+  /* Student chore cards - single line layout */
+  .grid > div,
+  .rounded-xl {
+    background: white !important;
+    border: none !important;
+    border-bottom: 1px solid #ccc !important;
+    border-radius: 0 !important;
+    padding: 6px 0 !important;
+    margin-bottom: 0 !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: baseline !important;
+    gap: 8px !important;
+  }
+
+  /* Hide the person header flex container structure */
+  .flex.items-center.justify-between.mb-4 {
+    display: contents !important;
+    margin: 0 !important;
+  }
+
+  .flex.items-center.gap-3 {
+    display: contents !important;
+  }
+
+  /* Student avatar - hide */
+  .w-10.h-10.rounded-full,
+  .w-8.h-8.rounded-full,
+  .w-7.h-7.rounded-full {
+    display: none !important;
+  }
+
+  /* Student name - inline */
+  .font-semibold.text-white.text-lg,
+  .font-semibold.text-lg {
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    color: #000 !important;
+    border: none !important;
+    padding: 0 !important;
+    display: inline !important;
+    white-space: nowrap !important;
+  }
+
+  /* Add colon after name */
+  .font-semibold.text-white.text-lg::after,
+  .font-semibold.text-lg::after {
+    content: ":" !important;
+  }
+
+  /* Section headers (Weekly Chore, Daily Chores) - hide */
+  .text-xs.font-medium.uppercase.tracking-wide {
+    display: none !important;
+  }
+
+  /* Weekly and Daily chore sections - inline */
+  .mb-3,
+  div[class*="mb-3"] {
+    display: inline !important;
+    margin: 0 !important;
+  }
+
+  /* Chore item container - inline */
+  .flex.items-center.gap-3.p-3.rounded-lg {
+    display: inline !important;
+    padding: 0 !important;
+    border: none !important;
+    background: white !important;
+  }
+
+  /* Hide checkboxes/buttons in print */
+  .w-5.h-5.rounded-full.border-2,
+  .w-4.h-4.rounded-full.border-2,
+  button.w-5,
+  button.w-4,
+  button[class*="rounded-full"] {
+    display: none !important;
+  }
+
+  /* Chore name - inline */
+  .font-medium {
+    font-size: 12px !important;
+    color: #000 !important;
+    text-decoration: none !important;
+    display: inline !important;
+  }
+
+  /* Chore description - hide for compact view */
+  .text-xs.text-gray-500.mt-0\.5,
+  p.text-xs {
+    display: none !important;
+  }
+
+  /* Flex-1 div containing chore name */
+  .flex-1 {
+    display: inline !important;
+  }
+
+  /* Daily chores section - inline */
+  .space-y-2 {
+    display: inline !important;
+    margin: 0 !important;
+  }
+
+  .space-y-2 > div {
+    display: inline !important;
+  }
+
+  /* Daily chore items - inline */
+  .p-3.rounded-lg,
+  div[class*="bg-purple"] {
+    background: white !important;
+    border: none !important;
+    padding: 0 !important;
+    display: inline !important;
+    margin-left: 8px !important;
+  }
+
+  /* Day badges in daily chores - inline text */
+  .flex.flex-wrap.gap-2 {
+    display: inline !important;
+  }
+
+  .flex.flex-wrap.gap-2 button,
+  .flex.flex-wrap.gap-2 > * {
+    background: white !important;
+    border: none !important;
+    padding: 0 2px !important;
+    font-size: 10px !important;
+    color: #555 !important;
+    display: inline !important;
+  }
+
+  /* Free day text */
+  .text-gray-500.text-sm {
+    font-size: 11px !important;
+    color: #666 !important;
+    font-style: italic !important;
+    display: inline !important;
+  }
+
+  /* Edit dropdowns - hide */
+  select,
+  .mt-2 select,
+  .mt-2 {
+    display: none !important;
+  }
+
+  /* Done badge - hide */
+  .text-xs.font-medium.text-embrace.bg-embrace\/20,
+  span[class*="bg-embrace"] {
+    display: none !important;
+  }
+
+  /* Hide ring effects */
+  .ring-1,
+  [class*="ring-"] {
+    box-shadow: none !important;
+  }
+
+  /* Remove all animations */
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* Page setup */
+  @page {
+    margin: 0.5in;
+    size: portrait;
+  }
+
+  /* Print footer - simple */
+  .print-footer {
+    display: block !important;
+    text-align: center;
+    margin-top: 20px;
+    padding-top: 8px;
+    border-top: 1px solid #5ABA47;
+    font-size: 10px;
+    color: #888;
+  }
 }

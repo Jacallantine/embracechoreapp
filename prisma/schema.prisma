@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPERADMIN
+  ADMIN
+  SCHOLAR
+}
+
+enum RotationType {
+  WEEKLY
+  DAILY
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      Role     @default(SCHOLAR)
+  points    Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  choreAssignments ChoreAssignment[]
+  bonusPoints      BonusPoints[]      @relation("ReceivedBonus")
+  awardedBonus     BonusPoints[]      @relation("AwardedBonus")
+}
+
+model Chore {
+  id           String       @id @default(uuid())
+  name         String
+  description  String?
+  rotationType RotationType @default(WEEKLY)
+  sortOrder    Int          @default(0)
+  active       Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  assignments ChoreAssignment[]
+}
+
+model ChoreAssignment {
+  id        String   @id @default(uuid())
+  userId    String
+  choreId   String?
+  weekStart DateTime
+  dayIndex  Int      @default(0) // 0-based index for which chore day within the week (supports timesPerWeek > 1)
+  dayOfWeek Int?     // For daily chores: 0-6 (Sun-Sat). For weekly chores: negative (-1 = Sun, -2 = Mon, etc). Null for old-style.
+  completed Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chore Chore? @relation(fields: [choreId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, weekStart, dayOfWeek]) // Unique assignment per user/week/day (covers both weekly and daily)
+  @@index([weekStart])
+}
+
+model ChoreConfig {
+  id            String   @id @default(uuid())
+  timesPerWeek  Int      @default(2)
+  choreDays     String   @default("[1,4]") // JSON array of day numbers (0=Sun,1=Mon,...6=Sat)
+  updatedAt     DateTime @updatedAt
+}
+
+model RotationState {
+  id        String   @id @default(uuid())
+  offset    Int      @default(0) // how many positions the rotation has shifted
+  lastRotated DateTime @default(now())
+}
+
+model BonusPoints {
+  id          String   @id @default(uuid())
+  userId      String
+  awardedById String
+  points      Int
+  reason      String
+  createdAt   DateTime @default(now())
+
+  user      User @relation("ReceivedBonus", fields: [userId], references: [id], onDelete: Cascade)
+  awardedBy User @relation("AwardedBonus", fields: [awardedById], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}
