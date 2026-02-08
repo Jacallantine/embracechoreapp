@@ -17,9 +17,7 @@ export const metadata = {
   title: "Embrace Chores — Weekly Chore Rotation",
   description: "Manage and rotate weekly chores for Embrace Alabama Kids scholars",
   icons: {
-    icon: "/embrace-logo.svg",
-    shortcut: "/embrace-logo.svg",
-    apple: "/embrace-logo.svg",
+    icon: "/favicon.svg",
   },
 };
 

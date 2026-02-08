@@ -151,9 +151,12 @@ export async function generateCurrentWeekAssignments() {
       });
     }
 
-    // Create any missing assignments
+    // Create any missing assignments (skipDuplicates handles race conditions)
     if (neededAssignments.length > 0) {
-      await tx.choreAssignment.createMany({ data: neededAssignments });
+      await tx.choreAssignment.createMany({ 
+        data: neededAssignments,
+        skipDuplicates: true,
+      });
     }
 
     // Return all weekly assignments for this week (both current config and completed history)
