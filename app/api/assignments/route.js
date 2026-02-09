@@ -23,6 +23,13 @@ export async function GET(request) {
     assignments = await getWeekAssignments(weekStart);
   }
 
+  // Filter out deactivated users from assignments
+  const activeUserIds = new Set(
+    (await prisma.user.findMany({ where: { active: true }, select: { id: true } }))
+      .map(u => u.id)
+  );
+  assignments = assignments.filter(a => activeUserIds.has(a.userId));
+
   // Scholars only see their own assignments
   if (currentUser.role === 'SCHOLAR') {
     assignments = assignments.filter(a => a.userId === currentUser.id);

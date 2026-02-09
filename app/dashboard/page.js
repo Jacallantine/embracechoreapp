@@ -9,7 +9,7 @@ const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frid
 const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default function DashboardPage() {
-  const { user, loading: authLoading, checkAuth } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const [assignments, setAssignments] = useState([]);
   const [dailyAssignments, setDailyAssignments] = useState([]);
@@ -87,9 +87,6 @@ export default function DashboardPage() {
       if (!res.ok) {
         // Revert on failure
         setAssignments(previousAssignments);
-      } else {
-        // Refresh user data to update points display
-        checkAuth();
       }
     } catch {
       // Revert on error
@@ -122,9 +119,6 @@ export default function DashboardPage() {
       if (!res.ok) {
         // Revert on failure
         setDailyAssignments(previousDailyAssignments);
-      } else {
-        // Refresh user data to update points display
-        checkAuth();
       }
     } catch {
       // Revert on error
