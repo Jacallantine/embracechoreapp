@@ -247,23 +247,23 @@ export default function DashboardPage() {
               </motion.div>
             )}
           </div>
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center flex-col-reverse md:flex-row md:justify-between gap-2">
             <div className="flex items-center gap-1 sm:gap-2">
               <button
                 onClick={() => setWeekOffset(w => w - 1)}
-                className="px-2 sm:px-3 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition no-print text-sm"
+                className="px-2 md:w-fit w-16 sm:px-3 h-10 md:h-fit md:py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition no-print text-sm"
               >
                 ← <span className="hidden sm:inline">Prev</span>
               </button>
               <button
                 onClick={() => setWeekOffset(0)}
-                className="px-3 sm:px-4 py-2 bg-embrace/20 text-embrace-light rounded-lg hover:bg-embrace/30 transition text-xs sm:text-sm no-print whitespace-nowrap"
+                className="px-3 sm:px-4 h-10 md:h-fit md:py-2 bg-embrace/20 text-embrace-light rounded-lg hover:bg-embrace/30 transition text-xs sm:text-sm no-print whitespace-nowrap"
               >
                 This Week
               </button>
               <button
                 onClick={() => setWeekOffset(w => w + 1)}
-                className="px-2 sm:px-3 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition no-print text-sm"
+                className="px-2 md:w-fit w-16 sm:px-3 h-10 md:h-fit md:py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition no-print text-sm"
               >
                 <span className="hidden sm:inline">Next</span> →
               </button>
