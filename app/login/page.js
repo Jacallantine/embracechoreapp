@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../components/AuthProvider';
-import Image from 'next/image';
 import { motion } from 'framer-motion';
 
 export default function LoginPage() {
@@ -67,7 +66,8 @@ export default function LoginPage() {
             transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
             className="flex justify-center mb-4"
           >
-            <Image src="/embrace-logo.svg" alt="Embrace" width={80} height={80} priority />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/embrace-logo.svg" alt="Embrace" width={80} height={80} />
           </motion.div>
           <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">Embrace Chores</h1>
           <p className="text-gray-400">Sign in to manage chores</p>
