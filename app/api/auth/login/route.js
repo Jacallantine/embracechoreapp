@@ -49,8 +49,8 @@ export async function POST(request) {
     response.cookies.set('token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 60 * 60 * 24 * 7, // 7 days
+      sameSite: 'lax', // 'lax' works better with Safari's ITP than 'strict'
+      maxAge: 60 * 60 * 24 * 30, // 30 days
       path: '/',
     });
 
