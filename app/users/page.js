@@ -49,22 +49,43 @@ export default function UsersPage() {
     setError('');
     setSuccess('');
     setMutating(true);
+    
+    // Save form data before clearing
+    const formData = { ...form };
+    
+    // Optimistic update - add temp user
+    const tempId = `temp-${Date.now()}`;
+    const tempUser = {
+      id: tempId,
+      name: formData.name,
+      email: formData.email,
+      role: formData.role,
+      points: 0,
+      active: true,
+    };
+    setUsers(prev => [...prev, tempUser]);
+    setForm({ name: '', email: '', password: '', role: 'SCHOLAR' });
+    setShowForm(false);
+    
     try {
       const res = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify(formData),
       });
       const data = await res.json();
       if (res.ok) {
+        // Replace temp user with real one
+        setUsers(prev => prev.map(u => u.id === tempId ? data.user : u));
         setSuccess(`${data.user.name} created successfully!`);
-        setForm({ name: '', email: '', password: '', role: 'SCHOLAR' });
-        setShowForm(false);
-        fetchUsers();
       } else {
+        // Remove temp user on failure
+        setUsers(prev => prev.filter(u => u.id !== tempId));
         setError(data.error || 'Failed to create user');
       }
     } catch {
+      // Remove temp user on error
+      setUsers(prev => prev.filter(u => u.id !== tempId));
       setError('Network error — could not create user');
     } finally {
       setMutating(false);
@@ -75,16 +96,24 @@ export default function UsersPage() {
     if (!confirm(`Deactivate ${userName}?`)) return;
     setError('');
     setMutating(true);
+    
+    // Optimistic update - remove from list
+    const previousUsers = [...users];
+    setUsers(prev => prev.filter(u => u.id !== userId));
+    
     try {
       const res = await fetch(`/api/users?id=${userId}`, { method: 'DELETE' });
       if (res.ok) {
         setSuccess(`${userName} deactivated`);
-        fetchUsers();
       } else {
+        // Revert on failure
+        setUsers(previousUsers);
         const data = await res.json();
         setError(data.error || 'Failed to deactivate user');
       }
     } catch {
+      // Revert on error
+      setUsers(previousUsers);
       setError('Network error — could not deactivate user');
     } finally {
       setMutating(false);
@@ -99,6 +128,17 @@ export default function UsersPage() {
     }
     setMutating(true);
     setError('');
+    
+    // Optimistic update
+    const previousUsers = [...users];
+    const targetUser = users.find(u => u.id === userId);
+    const newPoints = action === 'add' 
+      ? (targetUser?.points || 0) + points 
+      : Math.max(0, (targetUser?.points || 0) - points);
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, points: newPoints } : u));
+    setEditingPoints(null);
+    setPointsInput('');
+    
     try {
       const res = await fetch('/api/users', {
         method: 'PATCH',
@@ -107,14 +147,17 @@ export default function UsersPage() {
       });
       const data = await res.json();
       if (res.ok) {
+        // Update with actual value from server
+        setUsers(prev => prev.map(u => u.id === userId ? { ...u, points: data.user.points } : u));
         setSuccess(`Points updated for ${data.user.name}`);
-        setEditingPoints(null);
-        setPointsInput('');
-        fetchUsers();
       } else {
+        // Revert on failure
+        setUsers(previousUsers);
         setError(data.error || 'Failed to update points');
       }
     } catch {
+      // Revert on error
+      setUsers(previousUsers);
       setError('Network error — could not update points');
     } finally {
       setMutating(false);

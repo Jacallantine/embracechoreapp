@@ -58,7 +58,8 @@ export async function generateCurrentWeekAssignments() {
   }
   const choreDays = JSON.parse(config.choreDays); // e.g., [1, 4] for Mon, Thu
 
-  if (scholars.length === 0) return [];
+  // If no scholars or no weekly chores, return empty (don't create placeholder assignments)
+  if (scholars.length === 0 || chores.length === 0) return [];
 
   // Use a transaction to avoid race conditions
   return await prisma.$transaction(async (tx) => {
@@ -112,7 +113,9 @@ export async function generateCurrentWeekAssignments() {
     // Determine what assignments are needed for the current config
     for (let i = 0; i < scholars.length; i++) {
       const scholar = scholars[i];
-      const choreIndex = ((i + offset) % scholars.length + scholars.length) % scholars.length;
+      // Shift DOWN: each week, scholar i gets the chore from slot (i - offset)
+      // This means chores move down the list, bottom goes to top
+      const choreIndex = ((i - offset) % scholars.length + scholars.length) % scholars.length;
       const chore = choreIndex < chores.length ? chores[choreIndex] : null;
 
       choreDays.forEach((choreDay, dayIdx) => {
@@ -213,7 +216,8 @@ export async function getWeekAssignments(targetDate) {
     orderBy: { sortOrder: 'asc' },
   });
 
-  if (scholars.length === 0) return [];
+  // If no scholars or no weekly chores, return empty
+  if (scholars.length === 0 || chores.length === 0) return [];
 
   // Find the most recent stored week <= target to use as reference
   const mostRecentWeek = await prisma.choreAssignment.findFirst({
@@ -238,7 +242,8 @@ export async function getWeekAssignments(targetDate) {
     const offset = rotationState.offset + weeksDiff;
 
     return scholars.map((scholar, i) => {
-      const choreIndex = ((i + offset) % scholars.length + scholars.length) % scholars.length;
+      // Shift DOWN: scholar i gets chore from slot (i - offset)
+      const choreIndex = ((i - offset) % scholars.length + scholars.length) % scholars.length;
       const chore = choreIndex < chores.length ? chores[choreIndex] : null;
       return {
         id: `computed-${scholar.id}-${targetWeek.getTime()}`,
@@ -254,14 +259,33 @@ export async function getWeekAssignments(targetDate) {
   }
 
   const refWeek = mostRecentWeek.weekStart;
-  const refAssignments = await prisma.choreAssignment.findMany({
-    where: { weekStart: refWeek, dayOfWeek: null },
+  // Get reference assignments - try new-style (negative dayOfWeek) first, fall back to old-style (null)
+  let refAssignments = await prisma.choreAssignment.findMany({
+    where: { weekStart: refWeek, dayOfWeek: { lt: 0 } },
     include: {
       user: { select: { id: true, name: true, email: true, role: true } },
       chore: { select: { id: true, name: true, description: true, active: true } },
     },
     orderBy: { user: { name: 'asc' } },
   });
+  // Deduplicate by userId (multiple dayOfWeek entries per user now)
+  const seenUsers = new Set();
+  refAssignments = refAssignments.filter(a => {
+    if (seenUsers.has(a.userId)) return false;
+    seenUsers.add(a.userId);
+    return true;
+  });
+  // Fall back to old-style if no new-style found
+  if (refAssignments.length === 0) {
+    refAssignments = await prisma.choreAssignment.findMany({
+      where: { weekStart: refWeek, dayOfWeek: null },
+      include: {
+        user: { select: { id: true, name: true, email: true, role: true } },
+        chore: { select: { id: true, name: true, description: true, active: true } },
+      },
+      orderBy: { user: { name: 'asc' } },
+    });
+  }
 
   const weeksDiff = getWeeksDiff(refWeek, targetWeek);
   const numScholars = scholars.length;

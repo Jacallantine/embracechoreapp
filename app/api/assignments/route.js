@@ -57,20 +57,31 @@ export async function GET(request) {
   const dailyAssignments = [];
   const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   
-  // Calculate cumulative day offset - each week picks up where last week ended
-  const { getWeeksDiff, getCurrentWeekStart: getBaseWeek } = await import('../../lib/rotation');
-  const baseWeek = getBaseWeek();
+  // Calculate cumulative day offset using a fixed reference point (rotation state)
+  // This ensures historical weeks show the same assignments they had when current
+  const { getWeeksDiff, getWeekStart: getWeekStartFn } = await import('../../lib/rotation');
+  
+  // Get or create rotation state as the fixed reference point
+  let rotationState = await prisma.rotationState.findFirst();
+  if (!rotationState) {
+    rotationState = await prisma.rotationState.create({
+      data: { offset: 0, lastRotated: weekStart },
+    });
+  }
+  
+  const baseWeek = getWeekStartFn(rotationState.lastRotated);
   const weeksDiff = getWeeksDiff(baseWeek, weekStart);
   
   // Total days that have passed since base week (7 days per week)
-  // This makes the rotation continuous across weeks
+  // This makes the rotation continuous and consistent across weeks
   const totalDaysOffset = weeksDiff * 7;
 
   // Fetch existing daily assignments for this week to get completion status
+  // Only get daily chores (dayOfWeek 0-6, non-negative)
   const existingDailyAssignments = await prisma.choreAssignment.findMany({
     where: {
       weekStart,
-      dayOfWeek: { not: null },
+      dayOfWeek: { gte: 0 }, // 0-6 for daily chores (not negative like weekly)
     },
   });
   // Create lookup map: choreId-userId-dayOfWeek -> assignment
@@ -87,9 +98,9 @@ export async function GET(request) {
     // Assign all 7 days across scholars
     for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
       // Calculate which scholar gets this day
-      // totalDaysOffset ensures continuity: if week 1 ended with Person 3 on Saturday,
-      // week 2 starts with Person 4 on Sunday
-      const absoluteDayPosition = totalDaysOffset + dayIdx + choreIdx;
+      // Subtract totalDaysOffset to shift DOWN like weekly chores
+      // This ensures continuity: each week the rotation shifts down
+      const absoluteDayPosition = dayIdx - totalDaysOffset + (choreIdx * 3); // offset each chore slightly
       const scholarIdx = ((absoluteDayPosition % numScholars) + numScholars) % numScholars;
       const scholar = scholars[scholarIdx];
       
@@ -115,9 +126,14 @@ export async function GET(request) {
   const editable = currentUser.role === 'SUPERADMIN' || currentUser.role === 'ADMIN';
   const currentWeek = getCurrentWeekStart();
 
+  // Filter daily assignments for scholars (they only see their own)
+  const filteredDailyAssignments = currentUser.role === 'SCHOLAR'
+    ? dailyAssignments.filter(d => d.userId === currentUser.id)
+    : dailyAssignments;
+
   const response = NextResponse.json({
     assignments,
-    dailyAssignments,
+    dailyAssignments: filteredDailyAssignments,
     weekStart: weekStart.toISOString(),
     currentWeekStart: currentWeek.toISOString(),
     editable,

@@ -72,40 +72,83 @@ export default function DashboardPage() {
   }, [user, authLoading, router, fetchAssignments, fetchChores]);
 
   const toggleComplete = async (assignmentId, currentStatus) => {
-    const res = await fetch('/api/assignments', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ assignmentId, completed: !currentStatus }),
-    });
-    if (res.ok) {
-      fetchAssignments();
-      // Refresh user data to update points display
-      checkAuth();
+    // Optimistic update
+    const previousAssignments = [...assignments];
+    setAssignments(prev => prev.map(a => 
+      a.id === assignmentId ? { ...a, completed: !currentStatus } : a
+    ));
+    
+    try {
+      const res = await fetch('/api/assignments', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assignmentId, completed: !currentStatus }),
+      });
+      if (!res.ok) {
+        // Revert on failure
+        setAssignments(previousAssignments);
+      } else {
+        // Refresh user data to update points display
+        checkAuth();
+      }
+    } catch {
+      // Revert on error
+      setAssignments(previousAssignments);
     }
   };
 
   const toggleDailyComplete = async (daily, currentStatus) => {
-    const res = await fetch('/api/assignments', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        isDaily: true,
-        choreId: daily.choreId,
-        userId: daily.userId,
-        dayOfWeek: daily.dayOfWeek,
-        weekStart: weekStart,
-        completed: !currentStatus,
-      }),
-    });
-    if (res.ok) {
-      fetchAssignments();
-      // Refresh user data to update points display
-      checkAuth();
+    // Optimistic update
+    const previousDailyAssignments = [...dailyAssignments];
+    setDailyAssignments(prev => prev.map(d => 
+      (d.choreId === daily.choreId && d.userId === daily.userId && d.dayOfWeek === daily.dayOfWeek)
+        ? { ...d, completed: !currentStatus }
+        : d
+    ));
+    
+    try {
+      const res = await fetch('/api/assignments', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          isDaily: true,
+          choreId: daily.choreId,
+          userId: daily.userId,
+          dayOfWeek: daily.dayOfWeek,
+          weekStart: weekStart,
+          completed: !currentStatus,
+        }),
+      });
+      if (!res.ok) {
+        // Revert on failure
+        setDailyAssignments(previousDailyAssignments);
+      } else {
+        // Refresh user data to update points display
+        checkAuth();
+      }
+    } catch {
+      // Revert on error
+      setDailyAssignments(previousDailyAssignments);
     }
   };
 
   const reassignChore = async (assignmentId, newChoreId) => {
     setSaving(true);
+    
+    // Find the chore details for optimistic update
+    const newChore = newChoreId ? chores.find(c => c.id === newChoreId) : null;
+    
+    // Optimistic update - update all assignments for this user 
+    const previousAssignments = [...assignments];
+    const targetAssignment = assignments.find(a => a.id === assignmentId);
+    if (targetAssignment) {
+      setAssignments(prev => prev.map(a => 
+        a.userId === targetAssignment.userId 
+          ? { ...a, choreId: newChoreId || null, chore: newChore ? { id: newChore.id, name: newChore.name, description: newChore.description } : null }
+          : a
+      ));
+    }
+    
     try {
       const res = await fetch('/api/assignments', {
         method: 'PATCH',
@@ -113,15 +156,19 @@ export default function DashboardPage() {
         body: JSON.stringify({ assignmentId, choreId: newChoreId || null }),
       });
       if (res.ok) {
-        // Refresh all assignments since a swap may have changed another person's assignment
-        await fetchAssignments();
         setEditingId(null);
+        // Refresh to get accurate state after potential swaps
+        fetchAssignments();
       } else {
         const err = await res.json();
+        // Revert on failure
+        setAssignments(previousAssignments);
         alert(err.error || 'Failed to reassign chore');
       }
     } catch (err) {
       console.error('Failed to reassign chore:', err);
+      // Revert on error
+      setAssignments(previousAssignments);
       alert('Failed to reassign chore');
     } finally {
       setSaving(false);
@@ -267,7 +314,7 @@ export default function DashboardPage() {
           >
             Loading schedule...
           </motion.div>
-        ) : assignments.length === 0 ? (
+        ) : assignments.length === 0 && dailyAssignments.length === 0 ? (
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -281,9 +328,11 @@ export default function DashboardPage() {
             <AnimatePresence mode="wait">
             {/* Group by user - show weekly chore days and daily chores for each person */}
             {(() => {
-              // Group assignments by user
+              // Group weekly assignments by user
               const userAssignments = {};
-              assignments.forEach(a => {
+              // Filter out assignments with deleted chores (chore is null but choreId exists)
+              const validAssignments = assignments.filter(a => !a.choreId || a.chore);
+              validAssignments.forEach(a => {
                 if (!userAssignments[a.userId]) {
                   userAssignments[a.userId] = {
                     user: a.user,
@@ -293,6 +342,18 @@ export default function DashboardPage() {
                 }
                 userAssignments[a.userId].weeklyChores.push(a);
               });
+              
+              // Also include users who only have daily chores (no weekly assignments)
+              dailyAssignments.forEach(d => {
+                if (!userAssignments[d.userId]) {
+                  userAssignments[d.userId] = {
+                    user: d.user,
+                    userId: d.userId,
+                    weeklyChores: [],
+                  };
+                }
+              });
+              
               return Object.values(userAssignments);
             })().map((userData, index) => {
               // Get daily assignments for this user
@@ -334,6 +395,7 @@ export default function DashboardPage() {
                   </div>
 
                   {/* Weekly Chore Section - Shows each chore day separately */}
+                  {userData.weeklyChores.length > 0 && (
                   <div className="mb-3">
                     <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">📅 Weekly Chore</div>
                     {hasChore ? (
@@ -440,6 +502,7 @@ export default function DashboardPage() {
                       </motion.div>
                     )}
                   </div>
+                  )}
 
                   {/* Daily Chores Section */}
                   {userDailyChores.length > 0 && (

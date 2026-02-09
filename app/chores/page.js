@@ -48,22 +48,43 @@ export default function ChoresPage() {
     setError('');
     setSuccess('');
     setMutating(true);
+    
+    // Save form data before clearing for API call
+    const formData = { ...form };
+    
+    // Optimistic update - add temp chore to list
+    const tempId = `temp-${Date.now()}`;
+    const tempChore = { 
+      id: tempId, 
+      name: formData.name, 
+      description: formData.description || null, 
+      rotationType: formData.rotationType,
+      sortOrder: chores.length,
+      active: true 
+    };
+    setChores(prev => [...prev, tempChore]);
+    setForm({ name: '', description: '', rotationType: 'WEEKLY' });
+    setShowForm(false);
+    
     try {
       const res = await fetch('/api/chores', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify(formData),
       });
       const data = await res.json();
       if (res.ok) {
+        // Replace temp chore with real one
+        setChores(prev => prev.map(c => c.id === tempId ? data.chore : c));
         setSuccess(`"${data.chore.name}" added!`);
-        setForm({ name: '', description: '', rotationType: 'WEEKLY' });
-        setShowForm(false);
-        fetchChores();
       } else {
+        // Remove temp chore on failure
+        setChores(prev => prev.filter(c => c.id !== tempId));
         setError(data.error || 'Failed to create chore');
       }
     } catch {
+      // Remove temp chore on error
+      setChores(prev => prev.filter(c => c.id !== tempId));
       setError('Network error — could not create chore');
     } finally {
       setMutating(false);
@@ -73,6 +94,12 @@ export default function ChoresPage() {
   const handleEdit = async (id) => {
     setError('');
     setMutating(true);
+    
+    // Optimistic update
+    const previousChores = [...chores];
+    setChores(prev => prev.map(c => c.id === id ? { ...c, ...editForm } : c));
+    setEditingId(null);
+    
     try {
       const res = await fetch('/api/chores', {
         method: 'PUT',
@@ -80,14 +107,16 @@ export default function ChoresPage() {
         body: JSON.stringify({ id, ...editForm }),
       });
       if (res.ok) {
-        setEditingId(null);
         setSuccess('Chore updated!');
-        fetchChores();
       } else {
+        // Revert on failure
+        setChores(previousChores);
         const data = await res.json();
         setError(data.error || 'Failed to update chore');
       }
     } catch {
+      // Revert on error
+      setChores(previousChores);
       setError('Network error — could not update chore');
     } finally {
       setMutating(false);
@@ -98,16 +127,24 @@ export default function ChoresPage() {
     if (!confirm(`Remove chore "${name}"?`)) return;
     setError('');
     setMutating(true);
+    
+    // Optimistic update
+    const previousChores = [...chores];
+    setChores(prev => prev.filter(c => c.id !== id));
+    
     try {
       const res = await fetch(`/api/chores?id=${id}`, { method: 'DELETE' });
       if (res.ok) {
         setSuccess(`"${name}" removed`);
-        fetchChores();
       } else {
+        // Revert on failure
+        setChores(previousChores);
         const data = await res.json();
         setError(data.error || 'Failed to remove chore');
       }
     } catch {
+      // Revert on error
+      setChores(previousChores);
       setError('Network error — could not remove chore');
     } finally {
       setMutating(false);
