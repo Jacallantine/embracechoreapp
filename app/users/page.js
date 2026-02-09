@@ -18,6 +18,7 @@ export default function UsersPage() {
   const [mutating, setMutating] = useState(false);
   const [editingPoints, setEditingPoints] = useState(null);
   const [pointsInput, setPointsInput] = useState('');
+  const [openMenu, setOpenMenu] = useState(null);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -301,42 +302,43 @@ export default function UsersPage() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.2, delay: index * 0.03 }}
-                className="bg-gray-900 rounded-xl border border-gray-800 p-4 hover:border-gray-700 transition"
+                className="bg-gray-900 rounded-xl border border-gray-800 p-4 hover:border-gray-700 transition relative"
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center text-lg font-medium text-gray-400">
+                <div className="flex sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className="w-10 h-10 shrink-0 rounded-full bg-gray-800 flex items-center justify-center text-lg font-medium text-gray-400">
                       {u.name.charAt(0).toUpperCase()}
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap pr-8 sm:pr-0">
                         {u.role === 'SCHOLAR' ? (
                           <Link
                             href={`/users/${u.id}`}
-                            className="font-medium text-white hover:text-embrace transition"
+                            className="font-medium text-white hover:text-embrace transition truncate"
                           >
                             {u.name}
                           </Link>
                         ) : (
-                          <span className="font-medium text-white">{u.name}</span>
+                          <span className="font-medium text-white truncate">{u.name}</span>
                         )}
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${roleBadge[u.role]}`}>
+                        <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${roleBadge[u.role]}`}>
                           {u.role}
                         </span>
                         {u.role === 'SCHOLAR' && (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
                             ⭐ {u.points || 0} pts
                           </span>
                         )}
                       </div>
-                      <p className="text-sm text-gray-500">{u.email}</p>
+                      <p className="text-sm text-gray-500 truncate">{u.email}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  {/* Desktop buttons */}
+                  <div className="hidden sm:flex items-center gap-2 shrink-0">
                     {u.role === 'SCHOLAR' && (
                       <Link
                         href={`/users/${u.id}`}
-                        className="text-sm text-gray-500 hover:text-embrace px-2 py-1.5 rounded-lg hover:bg-embrace/10 transition"
+                        className="text-sm text-gray-500 hover:text-embrace px-3 py-2 rounded-lg hover:bg-embrace/10 transition"
                       >
                         History
                       </Link>
@@ -349,7 +351,7 @@ export default function UsersPage() {
                           setEditingPoints(editingPoints === u.id ? null : u.id);
                           setPointsInput('');
                         }}
-                        className="text-sm text-gray-500 hover:text-amber-400 px-2 py-1.5 rounded-lg hover:bg-amber-500/10 transition"
+                        className="text-sm text-gray-500 hover:text-amber-400 px-3 py-2 rounded-lg hover:bg-amber-500/10 transition"
                       >
                         {editingPoints === u.id ? 'Cancel' : 'Points'}
                       </motion.button>
@@ -359,13 +361,72 @@ export default function UsersPage() {
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                         onClick={() => handleDelete(u.id, u.name)}
-                        className="text-sm text-gray-500 hover:text-red-400 px-3 py-1.5 rounded-lg hover:bg-red-500/10 transition"
+                        className="text-sm text-gray-500 hover:text-red-400 px-3 py-2 rounded-lg hover:bg-red-500/10 transition"
                       >
                         Remove
                       </motion.button>
                     )}
                   </div>
                 </div>
+                  
+                {/* Mobile dropdown - positioned top right (not shown for SUPERADMIN users) */}
+                {u.role !== 'SUPERADMIN' && (
+                  <div className="sm:hidden absolute top-2 right-2">
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => setOpenMenu(openMenu === u.id ? null : u.id)}
+                      className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition"
+                    >
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                      </svg>
+                    </motion.button>
+                    <AnimatePresence>
+                      {openMenu === u.id && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                          transition={{ duration: 0.15 }}
+                          className="absolute right-0 top-full mt-1 w-40 bg-gray-800 border border-gray-700 rounded-xl shadow-xl z-10 overflow-hidden"
+                        >
+                          {u.role === 'SCHOLAR' && (
+                            <Link
+                              href={`/users/${u.id}`}
+                              onClick={() => setOpenMenu(null)}
+                              className="block w-full text-left px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-embrace transition"
+                            >
+                              📜 History
+                            </Link>
+                          )}
+                          {user.role === 'SUPERADMIN' && u.role === 'SCHOLAR' && (
+                            <button
+                              onClick={() => {
+                                setEditingPoints(editingPoints === u.id ? null : u.id);
+                                setPointsInput('');
+                                setOpenMenu(null);
+                              }}
+                              className="block w-full text-left px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-amber-400 transition"
+                            >
+                              ⭐ {editingPoints === u.id ? 'Cancel' : 'Points'}
+                            </button>
+                          )}
+                          {u.id !== user.id && (
+                            <button
+                              onClick={() => {
+                                setOpenMenu(null);
+                                handleDelete(u.id, u.name);
+                              }}
+                              className="block w-full text-left px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-red-400 transition"
+                            >
+                              🗑️ Remove
+                            </button>
+                          )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                )}
                 {editingPoints === u.id && (
                   <motion.div
                     initial={{ opacity: 0, height: 0 }}
@@ -373,22 +434,22 @@ export default function UsersPage() {
                     exit={{ opacity: 0, height: 0 }}
                     className="mt-4 pt-4 border-t border-gray-800"
                   >
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                    <div className="flex flex-col gap-3">
                       <input
                         type="number"
                         min="0"
                         value={pointsInput}
                         onChange={e => setPointsInput(e.target.value)}
                         placeholder="Points amount"
-                        className="w-full sm:w-32 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                        className="w-full sm:w-32 px-3 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
                       />
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2">
                         <motion.button
                           whileHover={{ scale: 1.05 }}
                           whileTap={{ scale: 0.95 }}
                           onClick={() => handlePointsChange(u.id, 'add')}
                           disabled={mutating}
-                          className="px-3 py-2 bg-green-500/20 text-green-400 text-sm rounded-lg hover:bg-green-500/30 transition disabled:opacity-50"
+                          className="flex-1 sm:flex-none px-4 py-2.5 bg-green-500/20 text-green-400 text-sm rounded-lg hover:bg-green-500/30 transition disabled:opacity-50"
                         >
                           + Add
                         </motion.button>
@@ -397,7 +458,7 @@ export default function UsersPage() {
                           whileTap={{ scale: 0.95 }}
                           onClick={() => handlePointsChange(u.id, 'subtract')}
                           disabled={mutating}
-                          className="px-3 py-2 bg-red-500/20 text-red-400 text-sm rounded-lg hover:bg-red-500/30 transition disabled:opacity-50"
+                          className="flex-1 sm:flex-none px-4 py-2.5 bg-red-500/20 text-red-400 text-sm rounded-lg hover:bg-red-500/30 transition disabled:opacity-50"
                         >
                           − Subtract
                         </motion.button>
@@ -406,13 +467,13 @@ export default function UsersPage() {
                           whileTap={{ scale: 0.95 }}
                           onClick={() => handlePointsChange(u.id, 'set')}
                           disabled={mutating}
-                          className="px-3 py-2 bg-gray-700 text-gray-300 text-sm rounded-lg hover:bg-gray-600 transition disabled:opacity-50"
+                          className="flex-1 sm:flex-none px-4 py-2.5 bg-gray-700 text-gray-300 text-sm rounded-lg hover:bg-gray-600 transition disabled:opacity-50"
                         >
                           Set To
                         </motion.button>
                       </div>
                     </div>
-                    <p className="text-xs text-gray-500 mt-2">Current: {u.points || 0} points</p>
+                    <p className="text-xs text-gray-500 mt-3">Current: {u.points || 0} points</p>
                   </motion.div>
                 )}
               </motion.div>
