@@ -374,20 +374,30 @@ export async function PATCH(request) {
       return NextResponse.json({ error: 'Chore not found or inactive' }, { status: 404 });
     }
 
-    // If this chore is already assigned to someone else this week, set them to Free Day
+    // If this chore is already assigned to someone else this week, set ALL their weekly assignments to Free Day
     await prisma.choreAssignment.updateMany({
       where: {
         choreId: choreId,
         weekStart: assignment.weekStart,
-        id: { not: realAssignmentId },
+        dayOfWeek: { lt: 0 }, // Only weekly assignments
       },
       data: { choreId: null, completed: false },
     });
   }
 
-  const updated = await prisma.choreAssignment.update({
-    where: { id: realAssignmentId },
+  // Update ALL of the target user's weekly assignments for this week (not just one)
+  // This ensures the chore is assigned for all chore days (e.g., Monday AND Thursday)
+  await prisma.choreAssignment.updateMany({
+    where: { 
+      userId: assignment.userId, 
+      weekStart: assignment.weekStart,
+      dayOfWeek: { lt: 0 }, // Only weekly assignments
+    },
     data: { choreId: choreId || null, completed: choreId ? assignment.completed : false },
+  });
+
+  const updated = await prisma.choreAssignment.findUnique({
+    where: { id: realAssignmentId },
     include: {
       user: { select: { id: true, name: true, email: true, role: true } },
       chore: { select: { id: true, name: true, description: true } },

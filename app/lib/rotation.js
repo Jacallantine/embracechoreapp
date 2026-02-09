@@ -33,6 +33,9 @@ export function getWeeksDiff(fromDate, toDate) {
  * This is the only week that gets stored in the database.
  * Uses a transaction to prevent race conditions.
  * Creates one assignment per chore day (from config) for weekly chores.
+ * 
+ * IMPORTANT: This rotates from the ACTUAL assignments of the most recent stored week,
+ * so manual reassignments cascade into future weeks.
  */
 export async function generateCurrentWeekAssignments() {
   const weekStart = getCurrentWeekStart();
@@ -87,7 +90,7 @@ export async function generateCurrentWeekAssignments() {
       });
     }
 
-    // Build a map of existing assignments by oderId-dayOfWeek for quick lookup
+    // Build a map of existing assignments by userId-dayOfWeek for quick lookup
     const existingMap = new Map();
     newStyleAssignments.forEach(a => {
       existingMap.set(`${a.userId}-${a.dayOfWeek}`, a);
@@ -97,40 +100,121 @@ export async function generateCurrentWeekAssignments() {
     const neededAssignments = [];
     const existingForCurrentConfig = [];
 
-    // Get or create rotation state first (needed for chore assignment calculation)
-    let rotationState = await tx.rotationState.findFirst();
-    if (!rotationState) {
-      rotationState = await tx.rotationState.create({
-        data: { offset: 0, lastRotated: weekStart },
+    // Find the most recent PREVIOUS stored week to use as rotation base
+    // This ensures manual reassignments cascade into future weeks
+    const previousWeek = await tx.choreAssignment.findFirst({
+      where: { 
+        weekStart: { lt: weekStart }, 
+        OR: [
+          { dayOfWeek: { lt: 0 } },
+          { dayOfWeek: null }
+        ]
+      },
+      select: { weekStart: true },
+      orderBy: { weekStart: 'desc' },
+    });
+
+    // Build the chore assignment map: scholarIndex -> choreId
+    const scholarIdToIndex = new Map(scholars.map((s, i) => [s.id, i]));
+    const numScholars = scholars.length;
+    let choreSlots = new Array(numScholars).fill(null);
+
+    if (previousWeek) {
+      // Use actual assignments from previous week and rotate
+      let prevAssignments = await tx.choreAssignment.findMany({
+        where: { weekStart: previousWeek.weekStart, dayOfWeek: { lt: 0 } },
+      });
+      // Deduplicate by userId
+      const seenUsers = new Set();
+      prevAssignments = prevAssignments.filter(a => {
+        if (seenUsers.has(a.userId)) return false;
+        seenUsers.add(a.userId);
+        return true;
+      });
+      // Fall back to old-style if no new-style
+      if (prevAssignments.length === 0) {
+        prevAssignments = await tx.choreAssignment.findMany({
+          where: { weekStart: previousWeek.weekStart, dayOfWeek: null },
+        });
+      }
+
+      // Build slots from previous week
+      const prevSlots = new Array(numScholars).fill(null);
+      for (const a of prevAssignments) {
+        const idx = scholarIdToIndex.get(a.userId);
+        if (idx !== undefined) {
+          prevSlots[idx] = a.choreId;
+        }
+      }
+
+      // Rotate: each week chores shift down by 1 position
+      // Scholar at index j this week gets chore from slot (j - 1) last week
+      const weeksDiff = getWeeksDiff(previousWeek.weekStart, weekStart);
+      for (let j = 0; j < numScholars; j++) {
+        const sourceSlot = ((j - weeksDiff) % numScholars + numScholars) % numScholars;
+        choreSlots[j] = prevSlots[sourceSlot];
+      }
+    } else {
+      // No previous week - use rotation state for initial setup
+      let rotationState = await tx.rotationState.findFirst();
+      if (!rotationState) {
+        rotationState = await tx.rotationState.create({
+          data: { offset: 0, lastRotated: weekStart },
+        });
+      }
+
+      const referenceWeek = getWeekStart(rotationState.lastRotated);
+      const weeksDiff = getWeeksDiff(referenceWeek, weekStart);
+      const offset = rotationState.offset + weeksDiff;
+
+      for (let i = 0; i < numScholars; i++) {
+        const choreIndex = ((i - offset) % numScholars + numScholars) % numScholars;
+        choreSlots[i] = choreIndex < chores.length ? chores[choreIndex].id : null;
+      }
+    }
+
+    // First pass: collect existing assignments and track which chores are already assigned
+    const alreadyAssignedChoreIds = new Set();
+    for (let i = 0; i < scholars.length; i++) {
+      const scholar = scholars[i];
+      choreDays.forEach((choreDay) => {
+        const dayOfWeek = -(choreDay + 1);
+        const key = `${scholar.id}-${dayOfWeek}`;
+        const existingAssignment = existingMap.get(key);
+        if (existingAssignment) {
+          existingForCurrentConfig.push(existingAssignment);
+          if (existingAssignment.choreId) {
+            alreadyAssignedChoreIds.add(existingAssignment.choreId);
+          }
+        }
       });
     }
 
-    // Compute offset for current week
-    const referenceWeek = getWeekStart(rotationState.lastRotated);
-    const weeksDiff = getWeeksDiff(referenceWeek, weekStart);
-    const offset = rotationState.offset + weeksDiff;
-
-    // Determine what assignments are needed for the current config
+    // Second pass: create assignments for scholars without existing ones
     for (let i = 0; i < scholars.length; i++) {
       const scholar = scholars[i];
-      // Shift DOWN: each week, scholar i gets the chore from slot (i - offset)
-      // This means chores move down the list, bottom goes to top
-      const choreIndex = ((i - offset) % scholars.length + scholars.length) % scholars.length;
-      const chore = choreIndex < chores.length ? chores[choreIndex] : null;
+      const calculatedChoreId = choreSlots[i];
 
       choreDays.forEach((choreDay, dayIdx) => {
-        const dayOfWeek = -(choreDay + 1); // Convert to negative storage format
+        const dayOfWeek = -(choreDay + 1);
         const key = `${scholar.id}-${dayOfWeek}`;
         const existingAssignment = existingMap.get(key);
 
-        if (existingAssignment) {
-          // Assignment exists for this day - keep it
-          existingForCurrentConfig.push(existingAssignment);
-        } else {
-          // Need to create assignment for this day
+        if (!existingAssignment) {
+          // Check if calculated chore is available
+          let assignedChoreId = null;
+          if (calculatedChoreId && !alreadyAssignedChoreIds.has(calculatedChoreId)) {
+            // Verify chore is still active
+            const choreExists = chores.find(c => c.id === calculatedChoreId);
+            if (choreExists) {
+              assignedChoreId = calculatedChoreId;
+              alreadyAssignedChoreIds.add(calculatedChoreId);
+            }
+          }
+
           neededAssignments.push({
             userId: scholar.id,
-            choreId: chore?.id || null,
+            choreId: assignedChoreId,
             weekStart,
             dayIndex: dayIdx,
             dayOfWeek,
