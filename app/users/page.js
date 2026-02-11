@@ -18,6 +18,7 @@ export default function UsersPage() {
   const [mutating, setMutating] = useState(false);
   const [editingPoints, setEditingPoints] = useState(null);
   const [pointsInput, setPointsInput] = useState('');
+  const [bonusReason, setBonusReason] = useState('');
   const [openMenu, setOpenMenu] = useState(null);
 
   const fetchUsers = useCallback(async () => {
@@ -121,10 +122,14 @@ export default function UsersPage() {
     }
   };
 
-  const handlePointsChange = async (userId, action) => {
+  const handlePointsChange = async (userId) => {
     const points = parseInt(pointsInput, 10);
-    if (isNaN(points) || points < 0) {
-      setError('Please enter a valid number');
+    if (isNaN(points) || points === 0) {
+      setError('Please enter a valid non-zero number');
+      return;
+    }
+    if (!bonusReason.trim()) {
+      setError('Please enter a reason for the points change');
       return;
     }
     setMutating(true);
@@ -133,33 +138,32 @@ export default function UsersPage() {
     // Optimistic update
     const previousUsers = [...users];
     const targetUser = users.find(u => u.id === userId);
-    const newPoints = action === 'add' 
-      ? (targetUser?.points || 0) + points 
-      : Math.max(0, (targetUser?.points || 0) - points);
+    const newPoints = Math.max(0, (targetUser?.points || 0) + points);
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, points: newPoints } : u));
     setEditingPoints(null);
     setPointsInput('');
+    setBonusReason('');
     
     try {
-      const res = await fetch('/api/users', {
-        method: 'PATCH',
+      const res = await fetch(`/api/users/${userId}/history`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, points, action }),
+        body: JSON.stringify({ points, reason: bonusReason.trim() }),
       });
       const data = await res.json();
       if (res.ok) {
-        // Update with actual value from server
-        setUsers(prev => prev.map(u => u.id === userId ? { ...u, points: data.user.points } : u));
-        setSuccess(`Points updated for ${data.user.name}`);
+        // Refetch to get updated points
+        await fetchUsers();
+        setSuccess(`Bonus points added for ${targetUser?.name}`);
       } else {
         // Revert on failure
         setUsers(previousUsers);
-        setError(data.error || 'Failed to update points');
+        setError(data.error || 'Failed to add bonus points');
       }
     } catch {
       // Revert on error
       setUsers(previousUsers);
-      setError('Network error — could not update points');
+      setError('Network error — could not add bonus points');
     } finally {
       setMutating(false);
     }
@@ -350,10 +354,11 @@ export default function UsersPage() {
                         onClick={() => {
                           setEditingPoints(editingPoints === u.id ? null : u.id);
                           setPointsInput('');
+                          setBonusReason('');
                         }}
                         className="text-sm text-gray-500 hover:text-amber-400 px-3 py-2 rounded-lg hover:bg-amber-500/10 transition"
                       >
-                        {editingPoints === u.id ? 'Cancel' : 'Points'}
+                        {editingPoints === u.id ? 'Cancel' : 'Bonus'}
                       </motion.button>
                     )}
                     {u.id !== user.id && u.role !== 'SUPERADMIN' && (
@@ -404,11 +409,12 @@ export default function UsersPage() {
                               onClick={() => {
                                 setEditingPoints(editingPoints === u.id ? null : u.id);
                                 setPointsInput('');
+                                setBonusReason('');
                                 setOpenMenu(null);
                               }}
                               className="block w-full text-left px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-amber-400 transition"
                             >
-                              ⭐ {editingPoints === u.id ? 'Cancel' : 'Points'}
+                              ⭐ {editingPoints === u.id ? 'Cancel' : 'Bonus'}
                             </button>
                           )}
                           {u.id !== user.id && (
@@ -435,45 +441,35 @@ export default function UsersPage() {
                     className="mt-4 pt-4 border-t border-gray-800"
                   >
                     <div className="flex flex-col gap-3">
-                      <input
-                        type="number"
-                        min="0"
-                        value={pointsInput}
-                        onChange={e => setPointsInput(e.target.value)}
-                        placeholder="Points amount"
-                        className="w-full sm:w-32 px-3 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
-                      />
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <input
+                          type="number"
+                          value={pointsInput}
+                          onChange={e => setPointsInput(e.target.value)}
+                          placeholder="Points (+ or -)"
+                          className="w-full sm:w-32 px-3 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                        />
+                        <input
+                          type="text"
+                          value={bonusReason}
+                          onChange={e => setBonusReason(e.target.value)}
+                          placeholder="Reason for bonus/penalty"
+                          className="flex-1 px-3 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                        />
+                      </div>
                       <div className="flex flex-wrap gap-2">
                         <motion.button
                           whileHover={{ scale: 1.05 }}
                           whileTap={{ scale: 0.95 }}
-                          onClick={() => handlePointsChange(u.id, 'add')}
+                          onClick={() => handlePointsChange(u.id)}
                           disabled={mutating}
-                          className="flex-1 sm:flex-none px-4 py-2.5 bg-green-500/20 text-green-400 text-sm rounded-lg hover:bg-green-500/30 transition disabled:opacity-50"
+                          className="flex-1 sm:flex-none px-4 py-2.5 bg-amber-500/20 text-amber-400 text-sm rounded-lg hover:bg-amber-500/30 transition disabled:opacity-50"
                         >
-                          + Add
-                        </motion.button>
-                        <motion.button
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => handlePointsChange(u.id, 'subtract')}
-                          disabled={mutating}
-                          className="flex-1 sm:flex-none px-4 py-2.5 bg-red-500/20 text-red-400 text-sm rounded-lg hover:bg-red-500/30 transition disabled:opacity-50"
-                        >
-                          − Subtract
-                        </motion.button>
-                        <motion.button
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => handlePointsChange(u.id, 'set')}
-                          disabled={mutating}
-                          className="flex-1 sm:flex-none px-4 py-2.5 bg-gray-700 text-gray-300 text-sm rounded-lg hover:bg-gray-600 transition disabled:opacity-50"
-                        >
-                          Set To
+                          {mutating ? 'Adding...' : 'Add Bonus'}
                         </motion.button>
                       </div>
+                      <p className="text-xs text-gray-500">Current: {u.points || 0} points • Use negative number to subtract</p>
                     </div>
-                    <p className="text-xs text-gray-500 mt-3">Current: {u.points || 0} points</p>
                   </motion.div>
                 )}
               </motion.div>
