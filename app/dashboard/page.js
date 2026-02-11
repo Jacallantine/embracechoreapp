@@ -535,8 +535,8 @@ export default function DashboardPage() {
                               <div className="flex flex-wrap gap-2">
                                 {days.sort((da, db) => da.dayIndex - db.dayIndex).map(d => {
                                   const isToday = d.dayIndex === today && weekOffset === 0;
-                                  const isPast = weekOffset === 0 && d.dayIndex < today;
-                                  const isFuture = weekOffset === 0 && d.dayIndex > today;
+                                  const isPast = weekOffset < 0 || (weekOffset === 0 && d.dayIndex < today);
+                                  const isFuture = weekOffset > 0 || (weekOffset === 0 && d.dayIndex > today);
                                   const isLocked = (isPast || isFuture) && !isSuperAdmin;
                                   
                                   return (

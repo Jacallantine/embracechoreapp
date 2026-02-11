@@ -321,25 +321,40 @@ export async function getWeekAssignments(targetDate) {
     const rotationState = await prisma.rotationState.findFirst();
     if (!rotationState) return [];
 
+    // Get config for chore days
+    let config = await prisma.choreConfig.findFirst();
+    if (!config) {
+      config = await prisma.choreConfig.create({
+        data: { timesPerWeek: 2, choreDays: '[1,4]' },
+      });
+    }
+    const choreDays = JSON.parse(config.choreDays);
+
     const referenceWeek = getWeekStart(rotationState.lastRotated);
     const weeksDiff = getWeeksDiff(referenceWeek, targetWeek);
     const offset = rotationState.offset + weeksDiff;
 
-    return scholars.map((scholar, i) => {
+    const result = [];
+    scholars.forEach((scholar, i) => {
       // Shift DOWN: scholar i gets chore from slot (i - offset)
       const choreIndex = ((i - offset) % scholars.length + scholars.length) % scholars.length;
       const chore = choreIndex < chores.length ? chores[choreIndex] : null;
-      return {
-        id: `computed-${scholar.id}-${targetWeek.getTime()}`,
-        userId: scholar.id,
-        user: { id: scholar.id, name: scholar.name, email: scholar.email, role: scholar.role },
-        choreId: chore?.id || null,
-        chore: chore ? { id: chore.id, name: chore.name, description: chore.description } : null,
-        weekStart: targetWeek,
-        completed: false,
-        isComputed: true,
-      };
+      choreDays.forEach((choreDay, dayIdx) => {
+        result.push({
+          id: `computed-${scholar.id}-${targetWeek.getTime()}-${choreDay}`,
+          userId: scholar.id,
+          user: { id: scholar.id, name: scholar.name, email: scholar.email, role: scholar.role },
+          choreId: chore?.id || null,
+          chore: chore ? { id: chore.id, name: chore.name, description: chore.description } : null,
+          weekStart: targetWeek,
+          dayIndex: dayIdx,
+          dayOfWeek: -(choreDay + 1),
+          completed: false,
+          isComputed: true,
+        });
+      });
     });
+    return result;
   }
 
   const refWeek = mostRecentWeek.weekStart;
@@ -386,25 +401,41 @@ export async function getWeekAssignments(targetDate) {
     }
   }
 
+  // Get config for chore days to generate proper day-specific assignments
+  let config = await prisma.choreConfig.findFirst();
+  if (!config) {
+    config = await prisma.choreConfig.create({
+      data: { timesPerWeek: 2, choreDays: '[1,4]' },
+    });
+  }
+  const choreDays = JSON.parse(config.choreDays);
+
   // Rotate: each week, chores shift down by 1 position.
   // Scholar at index j in the target week gets the chore from
   // slot (j - weeksDiff) in the reference week.
-  return scholars.map((scholar, j) => {
+  // Generate one assignment per chore day (like stored assignments)
+  const result = [];
+  scholars.forEach((scholar, j) => {
     const sourceSlot = ((j - weeksDiff) % numScholars + numScholars) % numScholars;
     const choreId = slots[sourceSlot];
     const chore = choreId ? chores.find(c => c.id === choreId) || null : null;
     // If the chore was deactivated since, treat as null
-    return {
-      id: `computed-${scholar.id}-${targetWeek.getTime()}`,
-      userId: scholar.id,
-      user: { id: scholar.id, name: scholar.name, email: scholar.email, role: scholar.role },
-      choreId: chore ? chore.id : null,
-      chore: chore ? { id: chore.id, name: chore.name, description: chore.description } : null,
-      weekStart: targetWeek,
-      completed: false,
-      isComputed: true,
-    };
+    choreDays.forEach((choreDay, dayIdx) => {
+      result.push({
+        id: `computed-${scholar.id}-${targetWeek.getTime()}-${choreDay}`,
+        userId: scholar.id,
+        user: { id: scholar.id, name: scholar.name, email: scholar.email, role: scholar.role },
+        choreId: chore ? chore.id : null,
+        chore: chore ? { id: chore.id, name: chore.name, description: chore.description } : null,
+        weekStart: targetWeek,
+        dayIndex: dayIdx,
+        dayOfWeek: -(choreDay + 1),
+        completed: false,
+        isComputed: true,
+      });
+    });
   });
+  return result;
 }
 
 /**
